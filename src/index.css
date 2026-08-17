@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0F111A;
+  color: #F1F5F9;
+  font-family: 'Fredoka', 'Outfit', sans-serif;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12141F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2D334D;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4B557A;
+}
+
+/* Game Utility Classes */
+@layer components {
+  .btn-game-gold {
+    @apply bg-amber-500 hover:bg-amber-400 active:translate-y-1 text-slate-950 font-bold px-4 py-2.5 rounded-2xl shadow-game-gold transition-all duration-150 flex items-center justify-center gap-2;
+  }
+  
+  .btn-game-purple {
+    @apply bg-purple-600 hover:bg-purple-500 active:translate-y-1 text-white font-bold px-4 py-2.5 rounded-2xl shadow-game-purple transition-all duration-150 flex items-center justify-center gap-2;
+  }
+  
+  .btn-game-green {
+    @apply bg-emerald-600 hover:bg-emerald-500 active:translate-y-1 text-white font-bold px-4 py-2.5 rounded-2xl shadow-game-green transition-all duration-150 flex items-center justify-center gap-2;
+  }
+  
+  .btn-game-blue {
+    @apply bg-blue-600 hover:bg-blue-500 active:translate-y-1 text-white font-bold px-4 py-2.5 rounded-2xl shadow-game-blue transition-all duration-150 flex items-center justify-center gap-2;
+  }
+
+  .btn-game-orange {
+    @apply bg-orange-500 hover:bg-orange-400 active:translate-y-1 text-white font-bold px-4 py-2.5 rounded-2xl shadow-game-orange transition-all duration-150 flex items-center justify-center gap-2;
+  }
+
+  .btn-game-ghost {
+    @apply bg-slate-800/80 hover:bg-slate-700 active:translate-y-0.5 text-slate-200 font-semibold px-4 py-2.5 rounded-2xl border border-slate-700 transition-all duration-150 flex items-center justify-center gap-2;
+  }
+
+  .game-card {
+    @apply bg-[#171A29] border-2 border-[#282E47] rounded-3xl p-5 shadow-game transition-all duration-200;
+  }
+
+  .game-card-hover {
+    @apply hover:border-purple-500/60 hover:shadow-glow-purple hover:-translate-y-1;
+  }
+
+  .game-badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide;
+  }
+}
+
+/* Glassmorphism effects */
+.glass-panel {
+  background: rgba(23, 26, 41, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
