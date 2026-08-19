@@ -16,14 +16,20 @@ export const NextMilestoneCard: React.FC<NextMilestoneCardProps> = ({
 }) => {
   const todayStr = formatDate(new Date());
 
-  // Find next locked achievement closest to completion
-  const lockedAchievements = state.achievements.filter(a => !a.unlocked);
+  // Find next locked achievement closest to completion (highest percentage)
+  const lockedAchievements = [...state.achievements]
+    .filter(a => !a.unlocked)
+    .sort((a, b) => (b.currentValue / b.requirement) - (a.currentValue / a.requirement));
+
   const nextAchievement = lockedAchievements[0] || {
-    title: 'Mestre da Disciplina',
-    description: 'Continue consistente para desbloquear a próxima medalha!',
-    icon: '🏆',
-    requirement: 14,
-    currentValue: 12
+    id: 'all_completed',
+    title: 'Todas as Medalhas Conquistadas!',
+    description: 'Parabéns, Guerreiro! Você alcançou a maestria em todos os hábitos.',
+    icon: '👑',
+    category: 'general' as const,
+    requirement: 100,
+    currentValue: 100,
+    unlocked: true
   };
 
   // Subgoals for today

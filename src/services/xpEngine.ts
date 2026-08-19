@@ -3,6 +3,7 @@ import { AppState, formatDate } from './storageService';
 import { getLevelProgress } from './levelConfig';
 import { soundEngine } from './audioService';
 import { XpTransaction } from '../types';
+import { evaluateAchievements } from './achievementsEngine';
 
 export interface XpAwardResult {
   newState: AppState;
@@ -64,38 +65,29 @@ export function awardXp(
     soundEngine.playXpGain();
   }
 
-  // Check achievements progress
-  const unlockedAchievements: string[] = [];
-  const updatedAchievements = state.achievements.map(ach => {
-    if (ach.unlocked) return ach;
-
-    let shouldUnlock = false;
-
-    if (ach.id === 'reach_monk_level' && newTotalXp >= 1000) shouldUnlock = true;
-    if (ach.id === 'legend_rank' && newTotalXp >= 4000) shouldUnlock = true;
-    if (ach.id === 'first_step' && state.xpTransactions.length >= 0) shouldUnlock = true;
-
-    if (shouldUnlock) {
-      unlockedAchievements.push(ach.title);
-      soundEngine.playAchievement();
-      return {
-        ...ach,
-        unlocked: true,
-        currentValue: ach.requirement,
-        unlockedAt: todayStr
-      };
-    }
-    return ach;
-  });
-
-  const updatedState: AppState = {
+  const stateWithNewXp: AppState = {
     ...state,
     user: {
       ...state.user,
       totalXp: newTotalXp
     },
-    xpTransactions: [newTx, ...state.xpTransactions],
-    achievements: updatedAchievements
+    xpTransactions: [newTx, ...state.xpTransactions]
+  };
+
+  // Check achievements progress across all categories
+  const evalResult = evaluateAchievements(stateWithNewXp);
+  const unlockedAchievementTitles: string[] = [];
+
+  if (evalResult.newlyUnlocked.length > 0) {
+    evalResult.newlyUnlocked.forEach(ach => {
+      unlockedAchievementTitles.push(ach.title);
+    });
+    soundEngine.playAchievement();
+  }
+
+  const updatedState: AppState = {
+    ...stateWithNewXp,
+    achievements: evalResult.achievements
   };
 
   return {
@@ -103,7 +95,7 @@ export function awardXp(
     xpAwarded: amount,
     leveledUp,
     newLevel: leveledUp ? newProgress.currentLevel.level : undefined,
-    unlockedAchievements
+    unlockedAchievements: unlockedAchievementTitles
   };
 }
 
@@ -116,11 +108,17 @@ export function adjustXp(
   description: string,
   dateStr: string
 ): AppState {
-  if (delta === 0) return state;
+  if (delta === 0) {
+    const evalResult = evaluateAchievements(state);
+    return { ...state, achievements: evalResult.achievements };
+  }
 
   const newTotalXp = Math.max(0, state.user.totalXp + delta);
   const appliedDelta = newTotalXp - state.user.totalXp;
-  if (appliedDelta === 0) return state;
+  if (appliedDelta === 0) {
+    const evalResult = evaluateAchievements(state);
+    return { ...state, achievements: evalResult.achievements };
+  }
 
   const tx: XpTransaction = {
     id: `xp-adj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -131,10 +129,16 @@ export function adjustXp(
     createdAt: new Date().toISOString()
   };
 
-  return {
+  const stateWithAdjustment: AppState = {
     ...state,
     user: { ...state.user, totalXp: newTotalXp },
     xpTransactions: [tx, ...state.xpTransactions]
+  };
+
+  const evalResult = evaluateAchievements(stateWithAdjustment);
+  return {
+    ...stateWithAdjustment,
+    achievements: evalResult.achievements
   };
 }
 

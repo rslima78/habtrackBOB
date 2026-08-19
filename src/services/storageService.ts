@@ -12,6 +12,7 @@ import {
   ExpenseCategory
 } from '../types';
 import { getFreshAchievements } from './achievementsConfig';
+import { evaluateAchievements } from './achievementsEngine';
 
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   { id: 'food', name: 'Alimentação', icon: '🍔', color: '#EF4444' },
@@ -358,7 +359,7 @@ export class StorageService {
         return fresh;
       }
       const parsed = JSON.parse(raw);
-      return {
+      const loaded: AppState = {
         user: parsed.user || { name: 'Meu Herói', totalXp: 0, soundEnabled: true, theme: 'dark', createdAt: new Date().toISOString() },
         workouts: parsed.workouts || [],
         books: parsed.books || [],
@@ -370,6 +371,11 @@ export class StorageService {
         achievements: parsed.achievements || getFreshAchievements(),
         settings: parsed.settings || DEFAULT_SETTINGS,
         hasCompletedOnboarding: parsed.hasCompletedOnboarding ?? true
+      };
+      const evalResult = evaluateAchievements(loaded);
+      return {
+        ...loaded,
+        achievements: evalResult.achievements
       };
     } catch (e) {
       console.error('Error loading state from localStorage:', e);
@@ -395,8 +401,10 @@ export class StorageService {
 
   public static resetToSeed(): AppState {
     const seed = generateSeedData();
-    this.saveState(seed);
-    return seed;
+    const evalResult = evaluateAchievements(seed);
+    const finalizedSeed = { ...seed, achievements: evalResult.achievements };
+    this.saveState(finalizedSeed);
+    return finalizedSeed;
   }
 
   public static exportBackup(state: AppState): void {
@@ -414,7 +422,9 @@ export class StorageService {
     if (!parsed.user || !parsed.settings) {
       throw new Error('Formato de backup inválido.');
     }
-    this.saveState(parsed);
-    return parsed;
+    const evalResult = evaluateAchievements(parsed);
+    const finalized = { ...parsed, achievements: evalResult.achievements };
+    this.saveState(finalized);
+    return finalized;
   }
 }

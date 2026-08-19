@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppState, StorageService, formatDate } from './services/storageService';
 import { calculateDailyScore } from './services/scoreCalculator';
 import { adjustXp, awardXp, triggerLevelUpConfetti } from './services/xpEngine';
+import { evaluateAchievements } from './services/achievementsEngine';
 import { soundEngine } from './services/audioService';
 
 // Layout & Common
@@ -77,11 +78,31 @@ export const App: React.FC = () => {
     soundEngine.setSoundEnabled(state.user.soundEnabled);
   }, [state.user.soundEnabled]);
 
-  // Persist on state change
+  // Persist on state change and evaluate achievements
   const updateStateAndPersist = (updater: (prev: AppState) => AppState) => {
     setState(prev => {
-      const next = updater(prev);
+      const intermediate = updater(prev);
+      const evalResult = evaluateAchievements(intermediate);
+      const next: AppState = {
+        ...intermediate,
+        achievements: evalResult.achievements
+      };
       StorageService.saveState(next);
+
+      if (evalResult.newlyUnlocked.length > 0) {
+        soundEngine.playAchievement();
+        evalResult.newlyUnlocked.forEach(ach => {
+          setXpToasts(t => [
+            ...t,
+            {
+              id: `${Date.now()}-${Math.random()}`,
+              amount: 0,
+              message: `🏆 Conquista: ${ach.title}!`,
+              emoji: ach.icon || '🏆'
+            }
+          ]);
+        });
+      }
       return next;
     });
   };
@@ -114,6 +135,21 @@ export const App: React.FC = () => {
           setLevelUpLevel(result.newLevel);
         }
       }
+
+      if (result.unlockedAchievements && result.unlockedAchievements.length > 0) {
+        result.unlockedAchievements.forEach(title => {
+          setXpToasts(t => [
+            ...t,
+            {
+              id: `${Date.now()}-${Math.random()}`,
+              amount: 0,
+              message: `🏆 Conquista: ${title}!`,
+              emoji: '🏆'
+            }
+          ]);
+        });
+      }
+
       return result.newState;
     });
   };

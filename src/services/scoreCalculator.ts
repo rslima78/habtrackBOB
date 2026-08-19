@@ -110,82 +110,205 @@ export interface StreakSummary {
   budgetStreak: { current: number; best: number; daysUnderBudget: number };
 }
 
+/**
+ * Calculates the longest consecutive days sequence from a list of YYYY-MM-DD date strings.
+ */
+export function calculateBestConsecutiveDays(dateStrings: string[]): number {
+  if (!dateStrings || dateStrings.length === 0) return 0;
+  const uniqueDates = Array.from(new Set(dateStrings)).sort();
+  if (uniqueDates.length === 0) return 0;
+
+  let maxStreak = 1;
+  let currentStreak = 1;
+
+  for (let i = 1; i < uniqueDates.length; i++) {
+    const prev = new Date(uniqueDates[i - 1] + 'T12:00:00');
+    const curr = new Date(uniqueDates[i] + 'T12:00:00');
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      currentStreak++;
+      if (currentStreak > maxStreak) {
+        maxStreak = currentStreak;
+      }
+    } else if (diffDays > 1) {
+      currentStreak = 1;
+    }
+  }
+
+  return maxStreak;
+}
+
+/**
+ * Calculates the current active streak counting backwards from today (or yesterday if today isn't completed yet).
+ */
+export function calculateCurrentActiveStreak(
+  isValidDate: (dateStr: string) => boolean,
+  isExplicitlyBroken?: (dateStr: string) => boolean,
+  maxLookbackDays: number = 365
+): number {
+  const today = new Date();
+  const todayStr = formatDate(today);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const yesterdayStr = formatDate(yesterday);
+
+  if (isExplicitlyBroken && isExplicitlyBroken(todayStr)) {
+    return 0;
+  }
+
+  let streak = 0;
+  let checkDate = new Date(today);
+
+  // If today is not completed yet, check if yesterday was valid.
+  // If yesterday is valid, start streak from yesterday so we don't break the streak mid-day.
+  if (!isValidDate(todayStr)) {
+    if (!isValidDate(yesterdayStr) || (isExplicitlyBroken && isExplicitlyBroken(yesterdayStr))) {
+      return 0;
+    }
+    checkDate = new Date(yesterday);
+  }
+
+  for (let i = 0; i < maxLookbackDays; i++) {
+    const dStr = formatDate(checkDate);
+    if (isExplicitlyBroken && isExplicitlyBroken(dStr)) {
+      break;
+    }
+    if (isValidDate(dStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
 export function calculateStreaks(state: AppState): StreakSummary {
   const today = new Date();
   const todayStr = formatDate(today);
 
-  // 1. Food Streak (Days without 'uncontrolled')
-  let currentFoodStreak = 0;
-  let bestFoodStreak = 18; // Robson's record in seed
-  
-  // Sort food logs descending
-  const sortedFood = [...state.foodLogs].sort((a, b) => b.date.localeCompare(a.date));
-  
-  // Check from today or yesterday
-  let checkDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    const dStr = formatDate(checkDate);
-    const log = sortedFood.find(f => f.date === dStr);
-    if (log && log.status !== 'uncontrolled') {
-      currentFoodStreak++;
-    } else if (i === 0 && !log) {
-      // today not logged yet, continue checking yesterday
-    } else {
-      break;
+  // ----------------------------------------------------
+  // 1. Food Streak (Days with 'controlled' or 'partial')
+  // ----------------------------------------------------
+  const controlledDates: string[] = [];
+  const foodLogMap = new Map<string, string>();
+  for (const log of state.foodLogs) {
+    foodLogMap.set(log.date, log.status);
+    if (log.status === 'controlled' || log.status === 'partial') {
+      controlledDates.push(log.date);
     }
-    checkDate.setDate(checkDate.getDate() - 1);
   }
-  bestFoodStreak = Math.max(bestFoodStreak, currentFoodStreak);
 
-  // 2. Workouts This Week
+  const currentFoodStreak = calculateCurrentActiveStreak(
+    dStr => {
+      const status = foodLogMap.get(dStr);
+      return status === 'controlled' || status === 'partial';
+    },
+    dStr => {
+      const status = foodLogMap.get(dStr);
+      return status === 'uncontrolled';
+    }
+  );
+  const bestFoodStreak = Math.max(currentFoodStreak, calculateBestConsecutiveDays(controlledDates));
+
+  // ----------------------------------------------------
+  // 2. Workouts Streak (Days with at least 1 workout)
+  // ----------------------------------------------------
+  const workoutDates = state.workouts.map(w => w.date);
+  const workoutDateSet = new Set(workoutDates);
+
+  const currentWorkoutStreak = calculateCurrentActiveStreak(dStr => workoutDateSet.has(dStr));
+  const bestWorkoutStreak = Math.max(currentWorkoutStreak, calculateBestConsecutiveDays(workoutDates));
+
+  // Workouts This Week
   const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday
   const startOfWeek = new Date();
   const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   startOfWeek.setDate(today.getDate() - diffToMonday);
   const startOfWeekStr = formatDate(startOfWeek);
-
   const workoutsThisWeek = state.workouts.filter(w => w.date >= startOfWeekStr && w.date <= todayStr).length;
 
-  // 3. Reading Today
+  // ----------------------------------------------------
+  // 3. Reading Streak (Days with reading >= goal)
+  // ----------------------------------------------------
+  const dailyGoal = state.settings.readingDailyPagesGoal || 20;
+  const pagesPerDateMap = new Map<string, number>();
+  for (const r of state.readingLogs) {
+    const prev = pagesPerDateMap.get(r.date) || 0;
+    pagesPerDateMap.set(r.date, prev + r.pagesRead);
+  }
+
+  const readingDatesMeetingGoal: string[] = [];
+  pagesPerDateMap.forEach((pages, date) => {
+    if (pages >= dailyGoal) {
+      readingDatesMeetingGoal.push(date);
+    }
+  });
+
+  const currentReadingStreak = calculateCurrentActiveStreak(dStr => {
+    const pages = pagesPerDateMap.get(dStr) || 0;
+    return pages >= dailyGoal;
+  });
+  const bestReadingStreak = Math.max(currentReadingStreak, calculateBestConsecutiveDays(readingDatesMeetingGoal));
+
   const todayReadings = state.readingLogs.filter(r => r.date === todayStr);
   const todayPages = todayReadings.reduce((sum, r) => sum + r.pagesRead, 0);
 
-  // Reading Streak (Days with reading >= goal)
-  let readingStreak = 0;
-  let checkReadDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    const dStr = formatDate(checkReadDate);
-    const dayRead = state.readingLogs.filter(r => r.date === dStr).reduce((s, r) => s + r.pagesRead, 0);
-    if (dayRead >= (state.settings.readingDailyPagesGoal || 20)) {
-      readingStreak++;
-    } else if (i === 0 && dayRead === 0) {
-      // today not done yet
-    } else {
-      break;
-    }
-    checkReadDate.setDate(checkReadDate.getDate() - 1);
+  // ----------------------------------------------------
+  // 4. Budget Streak (Days within daily limit)
+  // ----------------------------------------------------
+  const dailyLimit = state.settings.budgetDailyLimit || 80.0;
+  const spentPerDateMap = new Map<string, number>();
+  for (const e of state.expenses) {
+    const prev = spentPerDateMap.get(e.date) || 0;
+    spentPerDateMap.set(e.date, prev + e.amount);
   }
 
-  // 4. Budget Streak (Days within budget)
-  let budgetStreak = 0;
+  // Find all active tracked days (dates where user has workouts, food, reading, expenses, or subgoals)
+  const activeDatesSet = new Set<string>();
+  state.workouts.forEach(w => activeDatesSet.add(w.date));
+  state.foodLogs.forEach(f => activeDatesSet.add(f.date));
+  state.readingLogs.forEach(r => activeDatesSet.add(r.date));
+  state.expenses.forEach(e => activeDatesSet.add(e.date));
+  state.subGoals.forEach(sg => sg.completedDates?.forEach(d => activeDatesSet.add(d)));
+
+  // If no activities at all, budget streak is 0
+  let currentBudgetStreak = 0;
+  let bestBudgetStreak = 0;
   let daysUnderBudget = 0;
-  let checkBudgetDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    const dStr = formatDate(checkBudgetDate);
-    const daySpent = state.expenses.filter(e => e.date === dStr).reduce((s, e) => s + e.amount, 0);
-    if (daySpent <= (state.settings.budgetDailyLimit || 80.0)) {
-      if (i < 30) daysUnderBudget++;
-      budgetStreak++;
-    } else {
-      break;
+
+  if (activeDatesSet.size > 0) {
+    const budgetOkDates: string[] = [];
+    activeDatesSet.forEach(dStr => {
+      const spent = spentPerDateMap.get(dStr) || 0;
+      if (spent <= dailyLimit) {
+        budgetOkDates.push(dStr);
+      }
+    });
+
+    currentBudgetStreak = calculateCurrentActiveStreak(
+      dStr => activeDatesSet.has(dStr) && (spentPerDateMap.get(dStr) || 0) <= dailyLimit,
+      dStr => (spentPerDateMap.get(dStr) || 0) > dailyLimit
+    );
+    bestBudgetStreak = Math.max(currentBudgetStreak, calculateBestConsecutiveDays(budgetOkDates));
+
+    // Days under budget in the last 30 days
+    const checkDate30 = new Date(today);
+    for (let i = 0; i < 30; i++) {
+      const dStr = formatDate(checkDate30);
+      const spent = spentPerDateMap.get(dStr) || 0;
+      if (activeDatesSet.has(dStr) && spent <= dailyLimit) {
+        daysUnderBudget++;
+      }
+      checkDate30.setDate(checkDate30.getDate() - 1);
     }
-    checkBudgetDate.setDate(checkBudgetDate.getDate() - 1);
   }
 
   return {
-    foodStreak: { current: Math.max(12, currentFoodStreak), best: bestFoodStreak },
-    workoutStreak: { current: 8, best: 12, countThisWeek: workoutsThisWeek },
-    readingStreak: { current: Math.max(15, readingStreak), best: 21, todayPages },
-    budgetStreak: { current: Math.max(12, budgetStreak), best: 19, daysUnderBudget: Math.max(26, daysUnderBudget) }
+    foodStreak: { current: currentFoodStreak, best: bestFoodStreak },
+    workoutStreak: { current: currentWorkoutStreak, best: bestWorkoutStreak, countThisWeek: workoutsThisWeek },
+    readingStreak: { current: currentReadingStreak, best: bestReadingStreak, todayPages },
+    budgetStreak: { current: currentBudgetStreak, best: bestBudgetStreak, daysUnderBudget }
   };
 }

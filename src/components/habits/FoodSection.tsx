@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppSettings, FoodLog, SubGoal } from '../../types';
 import { Flame, Trophy, Calendar as CalendarIcon, CheckCircle2, Circle, HeartHandshake, Sparkles, Pencil, Trash2 } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { calculateBestConsecutiveDays, calculateCurrentActiveStreak } from '../../services/scoreCalculator';
 import { EditTarget, LogEditModal } from '../common/LogEditModal';
 
 interface FoodSectionProps {
@@ -31,26 +32,29 @@ export const FoodSection: React.FC<FoodSectionProps> = ({
   const todayStr = new Date().toISOString().split('T')[0];
   const todayFood = foodLogs.find(f => f.date === todayStr);
 
-  // Streak calculations
   const sortedLogs = [...foodLogs].sort((a, b) => b.date.localeCompare(a.date));
-  let currentStreak = 0;
-  let maxStreak = 18; // record
 
-  let checkDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    const dStr = checkDate.toISOString().split('T')[0];
-    const log = sortedLogs.find(f => f.date === dStr);
-    if (log && log.status !== 'uncontrolled') {
-      currentStreak++;
-    } else if (i === 0 && !log) {
-      // today not logged yet
-    } else {
-      break;
+  // Streak calculations
+  const controlledDates: string[] = [];
+  const foodLogMap = new Map<string, string>();
+  for (const log of foodLogs) {
+    foodLogMap.set(log.date, log.status);
+    if (log.status === 'controlled' || log.status === 'partial') {
+      controlledDates.push(log.date);
     }
-    checkDate.setDate(checkDate.getDate() - 1);
   }
-  currentStreak = Math.max(12, currentStreak);
-  maxStreak = Math.max(maxStreak, currentStreak);
+
+  const currentStreak = calculateCurrentActiveStreak(
+    dStr => {
+      const status = foodLogMap.get(dStr);
+      return status === 'controlled' || status === 'partial';
+    },
+    dStr => {
+      const status = foodLogMap.get(dStr);
+      return status === 'uncontrolled';
+    }
+  );
+  const maxStreak = Math.max(currentStreak, calculateBestConsecutiveDays(controlledDates));
 
   // Nutrition subgoals
   const foodSubGoals = subGoals.filter(sg => sg.habitCategory === 'food');
