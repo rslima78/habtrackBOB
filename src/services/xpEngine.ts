@@ -107,6 +107,37 @@ export function awardXp(
   };
 }
 
+// Applies a signed XP correction (used when a past log is edited and its XP value changes).
+// The transaction is dated on the edited day so the daily score reflects the correction.
+export function adjustXp(
+  state: AppState,
+  delta: number,
+  source: string,
+  description: string,
+  dateStr: string
+): AppState {
+  if (delta === 0) return state;
+
+  const newTotalXp = Math.max(0, state.user.totalXp + delta);
+  const appliedDelta = newTotalXp - state.user.totalXp;
+  if (appliedDelta === 0) return state;
+
+  const tx: XpTransaction = {
+    id: `xp-adj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    date: dateStr,
+    source,
+    description,
+    amount: appliedDelta,
+    createdAt: new Date().toISOString()
+  };
+
+  return {
+    ...state,
+    user: { ...state.user, totalXp: newTotalXp },
+    xpTransactions: [tx, ...state.xpTransactions]
+  };
+}
+
 export function triggerLevelUpConfetti() {
   confetti({
     particleCount: 120,

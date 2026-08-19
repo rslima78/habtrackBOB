@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Book, ReadingLog, SubGoal, AppSettings } from '../../types';
-import { Plus, BookOpen, Sparkles, Trophy, Trash2, Calendar as CalendarIcon, Timer, CheckCircle2, Circle, Bookmark } from 'lucide-react';
+import { Plus, BookOpen, Sparkles, Trophy, Trash2, Calendar as CalendarIcon, Timer, CheckCircle2, Circle, Bookmark, Pencil } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { EditTarget, LogEditModal } from '../common/LogEditModal';
 
 interface ReadingSectionProps {
   books: Book[];
@@ -11,6 +12,7 @@ interface ReadingSectionProps {
   onAddReadingLog: (log: Omit<ReadingLog, 'id' | 'createdAt' | 'xpEarned'>) => void;
   onAddBook: (book: Omit<Book, 'id'>) => void;
   onDeleteReadingLog: (id: string) => void;
+  onUpdateLog: (updated: EditTarget) => void;
   onToggleSubGoal: (subGoalId: string) => void;
 }
 
@@ -22,10 +24,12 @@ export const ReadingSection: React.FC<ReadingSectionProps> = ({
   onAddReadingLog,
   onAddBook,
   onDeleteReadingLog,
+  onUpdateLog,
   onToggleSubGoal
 }) => {
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<ReadingLog | null>(null);
 
   // Form states for reading log
   const [selectedBookId, setSelectedBookId] = useState(books[0]?.id || '');
@@ -308,17 +312,38 @@ export const ReadingSection: React.FC<ReadingSectionProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => { soundEngine.playClick(); onDeleteReadingLog(log.id); }}
-                className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
-                title="Excluir registro"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center shrink-0">
+                <button
+                  onClick={() => { soundEngine.playClick(); setEditingLog(log); }}
+                  className="text-slate-500 hover:text-amber-400 p-2 rounded-xl transition-colors cursor-pointer"
+                  title="Editar registro"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => { soundEngine.playClick(); onDeleteReadingLog(log.id); }}
+                  className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
+                  title="Excluir registro"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Modal: Editar Sessão de Leitura de um dia passado */}
+      {editingLog && (
+        <LogEditModal
+          target={{ kind: 'reading', log: editingLog }}
+          settings={settings}
+          books={books}
+          onSave={onUpdateLog}
+          onDelete={t => onDeleteReadingLog(t.log.id)}
+          onClose={() => setEditingLog(null)}
+        />
+      )}
 
       {/* Modal: Registrar Sessão de Leitura */}
       {isSessionModalOpen && (

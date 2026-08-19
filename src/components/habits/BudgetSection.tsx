@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ExpenseLog, SubGoal, AppSettings } from '../../types';
 import { EXPENSE_CATEGORIES } from '../../services/storageService';
-import { Plus, Trash2, Trophy, DollarSign, Calendar as CalendarIcon, CreditCard, TrendingUp, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
+import { Plus, Trash2, Trophy, DollarSign, Calendar as CalendarIcon, CreditCard, TrendingUp, AlertCircle, CheckCircle2, Circle, Pencil } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { EditTarget, LogEditModal } from '../common/LogEditModal';
 
 interface BudgetSectionProps {
   expenses: ExpenseLog[];
@@ -10,6 +11,7 @@ interface BudgetSectionProps {
   settings: AppSettings;
   onAddExpense: (expense: Omit<ExpenseLog, 'id' | 'createdAt'>) => void;
   onDeleteExpense: (id: string) => void;
+  onUpdateLog: (updated: EditTarget) => void;
   onToggleSubGoal: (subGoalId: string) => void;
 }
 
@@ -19,9 +21,11 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   settings,
   onAddExpense,
   onDeleteExpense,
+  onUpdateLog,
   onToggleSubGoal
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<ExpenseLog | null>(null);
   const [amount, setAmount] = useState('25.00');
   const [categoryId, setCategoryId] = useState('food');
   const [description, setDescription] = useState('');
@@ -257,6 +261,13 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                     - {settings.currency} {exp.amount.toFixed(2)}
                   </span>
                   <button
+                    onClick={() => { soundEngine.playClick(); setEditingExpense(exp); }}
+                    className="text-slate-500 hover:text-emerald-400 p-2 rounded-xl transition-colors cursor-pointer"
+                    title="Editar gasto"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => { soundEngine.playClick(); onDeleteExpense(exp.id); }}
                     className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
                     title="Excluir gasto"
@@ -269,6 +280,17 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
           })}
         </div>
       </div>
+
+      {/* Modal: Editar Gasto de um dia passado */}
+      {editingExpense && (
+        <LogEditModal
+          target={{ kind: 'expense', log: editingExpense }}
+          settings={settings}
+          onSave={onUpdateLog}
+          onDelete={t => onDeleteExpense(t.log.id)}
+          onClose={() => setEditingExpense(null)}
+        />
+      )}
 
       {/* Modal: Adicionar Gasto */}
       {isModalOpen && (

@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { AppState, formatDate } from '../../services/storageService';
 import { calculateDailyScore } from '../../services/scoreCalculator';
-import { ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, Pencil } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { EditTarget, LogEditModal } from '../common/LogEditModal';
+import { FoodControlStatus } from '../../types';
 
 interface MonthlyCalendarProps {
   state: AppState;
+  onUpdateLog: (updated: EditTarget) => void;
+  onDeleteLog: (target: EditTarget) => void;
+  onLogFood: (status: FoodControlStatus, notes?: string, dateStr?: string) => void;
 }
 
-export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
+export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
+  state,
+  onUpdateLog,
+  onDeleteLog,
+  onLogFood
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -65,6 +76,16 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
 
   const totalSpentSelected = selectedDayExpenses.reduce((s, e) => s + e.amount, 0);
   const totalPagesSelected = selectedDayReadings.reduce((s, r) => s + r.pagesRead, 0);
+
+  const renderEditButton = (target: EditTarget, label: string) => (
+    <button
+      onClick={() => { soundEngine.playClick(); setEditTarget(target); }}
+      className="text-slate-500 hover:text-purple-300 p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+      title={label}
+    >
+      <Pencil className="w-3.5 h-3.5" />
+    </button>
+  );
 
   return (
     <div className="space-y-6">
@@ -197,9 +218,24 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
                   <span className={`text-xs font-black ${isToday ? 'text-amber-400' : 'text-white'}`}>
                     {dayNum}
                   </span>
-                  {!isFuture && hasActivity && (
-                    <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                  )}
+                  <div className="flex items-center gap-1">
+                    {!isFuture && hasActivity && (
+                      <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                    )}
+                    {!isFuture && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          soundEngine.playClick();
+                          setSelectedDateStr(dateStr);
+                        }}
+                        className="text-slate-500 hover:text-purple-300 opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                        title={`Editar registros de ${dateStr}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {!isFuture && hasActivity && score && (
@@ -275,9 +311,12 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
                   <span>{selectedDayWorkouts.length > 0 ? 'Concluído' : 'Sem treino'}</span>
                 </div>
                 {selectedDayWorkouts.map(w => (
-                  <p key={w.id} className="text-xs text-slate-300">
-                    • {w.type === 'run' ? 'Corrida' : 'Caminhada'} de {w.distanceKm} km ({w.durationMin} min) {w.notes && `— "${w.notes}"`}
-                  </p>
+                  <div key={w.id} className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-slate-300">
+                      • {w.type === 'run' ? 'Corrida' : 'Caminhada'} de {w.distanceKm} km ({w.durationMin} min) {w.notes && `— "${w.notes}"`}
+                    </p>
+                    {renderEditButton({ kind: 'workout', log: w }, 'Editar treino')}
+                  </div>
                 ))}
               </div>
 
@@ -288,9 +327,12 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
                   <span>{totalPagesSelected} páginas</span>
                 </div>
                 {selectedDayReadings.map(r => (
-                  <p key={r.id} className="text-xs text-slate-300">
-                    • {r.bookTitle}: {r.pagesRead} páginas ({r.durationMin} min)
-                  </p>
+                  <div key={r.id} className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-slate-300">
+                      • {r.bookTitle}: {r.pagesRead} páginas ({r.durationMin} min)
+                    </p>
+                    {renderEditButton({ kind: 'reading', log: r }, 'Editar sessão de leitura')}
+                  </div>
                 ))}
               </div>
 
@@ -301,9 +343,12 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
                   <span>Total: {state.settings.currency} {totalSpentSelected.toFixed(2)} / {state.settings.currency} {state.settings.budgetDailyLimit.toFixed(2)}</span>
                 </div>
                 {selectedDayExpenses.map(e => (
-                  <p key={e.id} className="text-xs text-slate-300">
-                    • {e.description}: {state.settings.currency} {e.amount.toFixed(2)} ({e.paymentMethod || 'pix'})
-                  </p>
+                  <div key={e.id} className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-slate-300">
+                      • {e.description}: {state.settings.currency} {e.amount.toFixed(2)} ({e.paymentMethod || 'pix'})
+                    </p>
+                    {renderEditButton({ kind: 'expense', log: e }, 'Editar gasto')}
+                  </div>
                 ))}
               </div>
 
@@ -311,10 +356,30 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
               <div className="bg-[#121422] p-3 rounded-2xl border border-slate-800">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1">
                   <span className="flex items-center gap-1.5 text-orange-400 font-black">🍔 Alimentação</span>
-                  <span>{selectedDayFood ? (selectedDayFood.status === 'controlled' ? '😎 Controlado' : selectedDayFood.status === 'partial' ? '😐 Parcial' : '💥 Deslize') : 'Não registrado'}</span>
+                  <span className="flex items-center gap-1">
+                    {selectedDayFood ? (selectedDayFood.status === 'controlled' ? '😎 Controlado' : selectedDayFood.status === 'partial' ? '😐 Parcial' : '💥 Deslize') : 'Não registrado'}
+                    {selectedDayFood && renderEditButton({ kind: 'food', log: selectedDayFood }, 'Editar alimentação')}
+                  </span>
                 </div>
                 {selectedDayFood?.notes && (
                   <p className="text-xs text-slate-400 italic">"{selectedDayFood.notes}"</p>
+                )}
+                {!selectedDayFood && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {([
+                      { status: 'controlled' as const, emoji: '😎', label: 'Controlado' },
+                      { status: 'partial' as const, emoji: '😐', label: 'Parcial' },
+                      { status: 'uncontrolled' as const, emoji: '💥', label: 'Deslize' }
+                    ]).map(opt => (
+                      <button
+                        key={opt.status}
+                        onClick={() => onLogFood(opt.status, undefined, selectedDateStr)}
+                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl py-1.5 text-[11px] font-bold text-slate-200 transition-colors cursor-pointer"
+                      >
+                        {opt.emoji} {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -340,6 +405,18 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ state }) => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal: Editar um registro do dia selecionado */}
+      {editTarget && (
+        <LogEditModal
+          target={editTarget}
+          settings={state.settings}
+          books={state.books}
+          onSave={onUpdateLog}
+          onDelete={onDeleteLog}
+          onClose={() => setEditTarget(null)}
+        />
       )}
 
     </div>

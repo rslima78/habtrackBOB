@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
-import { FoodLog, SubGoal } from '../../types';
-import { Flame, Trophy, Calendar as CalendarIcon, CheckCircle2, Circle, HeartHandshake, Sparkles } from 'lucide-react';
+import { AppSettings, FoodLog, SubGoal } from '../../types';
+import { Flame, Trophy, Calendar as CalendarIcon, CheckCircle2, Circle, HeartHandshake, Sparkles, Pencil, Trash2 } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { EditTarget, LogEditModal } from '../common/LogEditModal';
 
 interface FoodSectionProps {
   foodLogs: FoodLog[];
   subGoals: SubGoal[];
+  settings: AppSettings;
   onLogFood: (status: 'controlled' | 'partial' | 'uncontrolled', notes?: string, dateStr?: string) => void;
+  onUpdateLog: (updated: EditTarget) => void;
+  onDeleteFoodLog: (id: string) => void;
   onToggleSubGoal: (subGoalId: string) => void;
 }
 
 export const FoodSection: React.FC<FoodSectionProps> = ({
   foodLogs,
   subGoals,
+  settings,
   onLogFood,
+  onUpdateLog,
+  onDeleteFoodLog,
   onToggleSubGoal
 }) => {
+  const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<'controlled' | 'partial' | 'uncontrolled'>('controlled');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -256,7 +264,7 @@ export const FoodSection: React.FC<FoodSectionProps> = ({
           {sortedLogs.slice(0, 10).map(log => (
             <div
               key={log.id}
-              className="bg-[#121422] border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between gap-3"
+              className="bg-[#121422] border border-slate-800 hover:border-orange-500/40 p-3.5 rounded-2xl flex items-center justify-between gap-3 transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="text-2xl shrink-0">
@@ -277,10 +285,38 @@ export const FoodSection: React.FC<FoodSectionProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="flex items-center shrink-0">
+                <button
+                  onClick={() => { soundEngine.playClick(); setEditingLog(log); }}
+                  className="text-slate-500 hover:text-orange-400 p-2 rounded-xl transition-colors cursor-pointer"
+                  title="Editar registro"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => { soundEngine.playClick(); onDeleteFoodLog(log.id); }}
+                  className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
+                  title="Excluir registro"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Modal: Editar Registro de um dia passado */}
+      {editingLog && (
+        <LogEditModal
+          target={{ kind: 'food', log: editingLog }}
+          settings={settings}
+          onSave={onUpdateLog}
+          onDelete={t => onDeleteFoodLog(t.log.id)}
+          onClose={() => setEditingLog(null)}
+        />
+      )}
 
     </div>
   );

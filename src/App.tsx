@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, StorageService, formatDate } from './services/storageService';
 import { calculateDailyScore } from './services/scoreCalculator';
-import { awardXp, triggerLevelUpConfetti } from './services/xpEngine';
+import { adjustXp, awardXp, triggerLevelUpConfetti } from './services/xpEngine';
 import { soundEngine } from './services/audioService';
 
 // Layout & Common
@@ -31,7 +31,35 @@ import { StatsView } from './components/stats/StatsView';
 import { AchievementsView } from './components/achievements/AchievementsView';
 import { SettingsView } from './components/settings/SettingsView';
 
+import { EditTarget } from './components/common/LogEditModal';
+
 import { WorkoutLog, ReadingLog, Book, ExpenseLog, FoodLog, SubGoal, HabitCategory } from './types';
+
+// Applies a page delta to one book, keeping status/finishedAt in sync.
+function applyBookPages(books: Book[], bookId: string | undefined, delta: number): Book[] {
+  if (!bookId || delta === 0) return books;
+  return books.map(b => {
+    if (b.id !== bookId) return b;
+    const nextPage = Math.max(0, Math.min(b.totalPages, b.currentPage + delta));
+    const isFinished = nextPage >= b.totalPages;
+    return {
+      ...b,
+      currentPage: nextPage,
+      status: isFinished ? ('completed' as const) : ('reading' as const),
+      finishedAt: isFinished ? (b.finishedAt || formatDate(new Date())) : undefined
+    };
+  });
+}
+
+function workoutXp(type: WorkoutLog['type'], settings: AppState['settings']): number {
+  return type === 'run' ? settings.xpValues.run : settings.xpValues.walk;
+}
+
+function foodXp(status: FoodLog['status'], settings: AppState['settings']): number {
+  if (status === 'controlled') return settings.xpValues.foodControlled;
+  if (status === 'partial') return settings.xpValues.foodPartial;
+  return 0;
+}
 
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => StorageService.loadState());
@@ -114,10 +142,15 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteWorkout = (id: string) => {
-    updateStateAndPersist(prev => ({
-      ...prev,
-      workouts: prev.workouts.filter(w => w.id !== id)
-    }));
+    updateStateAndPersist(prev => {
+      const removed = prev.workouts.find(w => w.id === id);
+      if (!removed) return prev;
+      const withoutLog = {
+        ...prev,
+        workouts: prev.workouts.filter(w => w.id !== id)
+      };
+      return adjustXp(withoutLog, -removed.xpEarned, 'workout', 'Treino removido', removed.date);
+    });
   };
 
   // 2. Reading handlers
@@ -174,10 +207,16 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteReadingLog = (id: string) => {
-    updateStateAndPersist(prev => ({
-      ...prev,
-      readingLogs: prev.readingLogs.filter(r => r.id !== id)
-    }));
+    updateStateAndPersist(prev => {
+      const removed = prev.readingLogs.find(r => r.id === id);
+      if (!removed) return prev;
+      const withoutLog = {
+        ...prev,
+        readingLogs: prev.readingLogs.filter(r => r.id !== id),
+        books: applyBookPages(prev.books, removed.bookId, -removed.pagesRead)
+      };
+      return adjustXp(withoutLog, -removed.xpEarned, 'reading', 'Sessão de leitura removida', removed.date);
+    });
   };
 
   // 3. Budget handlers
@@ -249,6 +288,89 @@ export const App: React.FC = () => {
           foodLogs: [...filtered, newFoodLog]
         };
       });
+    }
+  };
+
+  const handleDeleteFoodLog = (id: string) => {
+    updateStateAndPersist(prev => {
+      const removed = prev.foodLogs.find(f => f.id === id);
+      if (!removed) return prev;
+      const withoutLog = {
+        ...prev,
+        foodLogs: prev.foodLogs.filter(f => f.id !== id)
+      };
+      return adjustXp(withoutLog, -removed.xpEarned, 'food', 'Registro alimentar removido', removed.date);
+    });
+  };
+
+  // 4b. Editing past logs — one entry point for every habit.
+  // XP is re-derived from the saved values and the difference is booked on the log's own date.
+  const handleUpdateLog = (updated: EditTarget) => {
+    updateStateAndPersist(prev => {
+      switch (updated.kind) {
+        case 'workout': {
+          const previousLog = prev.workouts.find(w => w.id === updated.log.id);
+          if (!previousLog) return prev;
+
+          const xp = workoutXp(updated.log.type, prev.settings);
+          const saved: WorkoutLog = { ...updated.log, xpEarned: xp };
+          const withLog = {
+            ...prev,
+            workouts: prev.workouts.map(w => (w.id === saved.id ? saved : w))
+          };
+          return adjustXp(withLog, xp - previousLog.xpEarned, 'workout', 'Treino editado', saved.date);
+        }
+
+        case 'reading': {
+          const previousLog = prev.readingLogs.find(r => r.id === updated.log.id);
+          if (!previousLog) return prev;
+
+          const saved: ReadingLog = { ...updated.log, xpEarned: previousLog.xpEarned };
+
+          // Revert the old book's progress, then apply the new one.
+          let books = applyBookPages(prev.books, previousLog.bookId, -previousLog.pagesRead);
+          books = applyBookPages(books, saved.bookId, saved.pagesRead);
+
+          return {
+            ...prev,
+            readingLogs: prev.readingLogs.map(r => (r.id === saved.id ? saved : r)),
+            books
+          };
+        }
+
+        case 'expense': {
+          return {
+            ...prev,
+            expenses: prev.expenses.map(e => (e.id === updated.log.id ? updated.log : e))
+          };
+        }
+
+        case 'food': {
+          const previousLog = prev.foodLogs.find(f => f.id === updated.log.id);
+          if (!previousLog) return prev;
+
+          const xp = foodXp(updated.log.status, prev.settings);
+          const saved: FoodLog = { ...updated.log, xpEarned: xp };
+
+          // Only one food log per day — drop any other log sitting on the target date.
+          const foodLogs = prev.foodLogs
+            .filter(f => f.id === saved.id || f.date !== saved.date)
+            .map(f => (f.id === saved.id ? saved : f));
+
+          const withLog = { ...prev, foodLogs };
+          return adjustXp(withLog, xp - previousLog.xpEarned, 'food', 'Alimentação editada', saved.date);
+        }
+      }
+    });
+    soundEngine.playPop();
+  };
+
+  const handleDeleteLog = (target: EditTarget) => {
+    switch (target.kind) {
+      case 'workout': return handleDeleteWorkout(target.log.id);
+      case 'reading': return handleDeleteReadingLog(target.log.id);
+      case 'expense': return handleDeleteExpense(target.log.id);
+      case 'food': return handleDeleteFoodLog(target.log.id);
     }
   };
 
@@ -509,6 +631,7 @@ export const App: React.FC = () => {
                 settings={state.settings}
                 onAddWorkout={handleAddWorkout}
                 onDeleteWorkout={handleDeleteWorkout}
+                onUpdateLog={handleUpdateLog}
                 onToggleSubGoal={handleToggleSubGoal}
               />
             )}
@@ -522,6 +645,7 @@ export const App: React.FC = () => {
                 onAddReadingLog={handleAddReadingLog}
                 onAddBook={handleAddBook}
                 onDeleteReadingLog={handleDeleteReadingLog}
+                onUpdateLog={handleUpdateLog}
                 onToggleSubGoal={handleToggleSubGoal}
               />
             )}
@@ -533,6 +657,7 @@ export const App: React.FC = () => {
                 settings={state.settings}
                 onAddExpense={handleAddExpense}
                 onDeleteExpense={handleDeleteExpense}
+                onUpdateLog={handleUpdateLog}
                 onToggleSubGoal={handleToggleSubGoal}
               />
             )}
@@ -541,7 +666,10 @@ export const App: React.FC = () => {
               <FoodSection
                 foodLogs={state.foodLogs}
                 subGoals={state.subGoals}
+                settings={state.settings}
                 onLogFood={handleLogFood}
+                onUpdateLog={handleUpdateLog}
+                onDeleteFoodLog={handleDeleteFoodLog}
                 onToggleSubGoal={handleToggleSubGoal}
               />
             )}
@@ -560,7 +688,12 @@ export const App: React.FC = () => {
 
         {/* 📅 TAB 3: CALENDÁRIO */}
         {activeTab === 'calendar' && (
-          <MonthlyCalendar state={state} />
+          <MonthlyCalendar
+            state={state}
+            onUpdateLog={handleUpdateLog}
+            onDeleteLog={handleDeleteLog}
+            onLogFood={handleLogFood}
+          />
         )}
 
         {/* 📊 TAB 4: ESTATÍSTICAS */}

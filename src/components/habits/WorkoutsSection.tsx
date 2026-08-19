@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { WorkoutLog, SubGoal, AppSettings } from '../../types';
-import { Plus, Trash2, Trophy, Flame, Timer, Footprints, Calendar as CalendarIcon, CheckCircle2, Circle } from 'lucide-react';
+import { Plus, Trash2, Trophy, Flame, Timer, Footprints, Calendar as CalendarIcon, CheckCircle2, Circle, Pencil } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { EditTarget, LogEditModal } from '../common/LogEditModal';
 
 interface WorkoutsSectionProps {
   workouts: WorkoutLog[];
@@ -9,6 +10,7 @@ interface WorkoutsSectionProps {
   settings: AppSettings;
   onAddWorkout: (workout: Omit<WorkoutLog, 'id' | 'createdAt' | 'xpEarned'>) => void;
   onDeleteWorkout: (id: string) => void;
+  onUpdateLog: (updated: EditTarget) => void;
   onToggleSubGoal: (subGoalId: string) => void;
 }
 
@@ -18,9 +20,11 @@ export const WorkoutsSection: React.FC<WorkoutsSectionProps> = ({
   settings,
   onAddWorkout,
   onDeleteWorkout,
+  onUpdateLog,
   onToggleSubGoal
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutLog | null>(null);
   const [type, setType] = useState<'walk' | 'run'>('run');
   const [distanceKm, setDistanceKm] = useState('5.0');
   const [durationMin, setDurationMin] = useState('30');
@@ -199,18 +203,38 @@ export const WorkoutsSection: React.FC<WorkoutsSectionProps> = ({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => { soundEngine.playClick(); onDeleteWorkout(workout.id); }}
-                  className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
-                  title="Excluir treino"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center shrink-0">
+                  <button
+                    onClick={() => { soundEngine.playClick(); setEditingWorkout(workout); }}
+                    className="text-slate-500 hover:text-blue-400 p-2 rounded-xl transition-colors cursor-pointer"
+                    title="Editar treino"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => { soundEngine.playClick(); onDeleteWorkout(workout.id); }}
+                    className="text-slate-500 hover:text-rose-400 p-2 rounded-xl transition-colors cursor-pointer"
+                    title="Excluir treino"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal: Editar Treino de um dia passado */}
+      {editingWorkout && (
+        <LogEditModal
+          target={{ kind: 'workout', log: editingWorkout }}
+          settings={settings}
+          onSave={onUpdateLog}
+          onDelete={t => onDeleteWorkout(t.log.id)}
+          onClose={() => setEditingWorkout(null)}
+        />
+      )}
 
       {/* Modal: Novo Treino */}
       {isModalOpen && (
