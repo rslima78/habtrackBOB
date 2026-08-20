@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
-import { SubGoal, HabitCategory } from '../../types';
-import { Plus, Trash2, CheckCircle2, Circle, Target, Sparkles, Filter } from 'lucide-react';
+import { SubGoal, HabitCategory, SubGoalType } from '../../types';
+import { Plus, Sparkles, Layers, CheckSquare } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
+import { SubGoalCard } from './SubGoalCard';
 
 interface SubGoalsSectionProps {
   subGoals: SubGoal[];
   onAddSubGoal: (subGoal: Omit<SubGoal, 'id' | 'completedDates' | 'createdAt'>) => void;
   onDeleteSubGoal: (id: string) => void;
-  onToggleSubGoal: (id: string) => void;
+  onProgressSubGoal: (id: string, delta: 1 | -1) => void;
 }
 
 export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
   subGoals,
   onAddSubGoal,
   onDeleteSubGoal,
-  onToggleSubGoal
+  onProgressSubGoal
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<HabitCategory | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,8 +23,10 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
   // Form states
   const [title, setTitle] = useState('');
   const [habitCategory, setHabitCategory] = useState<HabitCategory>('workout');
+  const [goalType, setGoalType] = useState<SubGoalType>('segmented');
+  const [targetParts, setTargetParts] = useState<number>(3);
   const [periodicity, setPeriodicity] = useState<'daily' | 'weekly' | 'one-time'>('daily');
-  const [xpValue, setXpValue] = useState('10');
+  const [xpValue, setXpValue] = useState('20');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -31,7 +34,12 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
     ? subGoals
     : subGoals.filter(sg => sg.habitCategory === selectedCategory);
 
-  const completedTodayCount = subGoals.filter(sg => sg.completedDates.includes(todayStr)).length;
+  const completedTodayCount = subGoals.filter(sg => {
+    if (sg.type === 'segmented') {
+      return (sg.totalCompletions || 0) > 0 || (sg.completedDates || []).includes(todayStr);
+    }
+    return (sg.completedDates || []).includes(todayStr);
+  }).length;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,22 +48,17 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
     onAddSubGoal({
       title: title.trim(),
       habitCategory,
-      periodicity,
-      xpValue: parseInt(xpValue) || 10
+      type: goalType,
+      targetParts: goalType === 'segmented' ? targetParts : undefined,
+      currentParts: 0,
+      totalCompletions: 0,
+      periodicity: goalType === 'segmented' ? 'daily' : periodicity,
+      xpValue: parseInt(xpValue) || (goalType === 'segmented' ? 20 : 10)
     });
 
     setIsModalOpen(false);
     setTitle('');
-  };
-
-  const getCategoryBadge = (cat: HabitCategory) => {
-    switch (cat) {
-      case 'workout': return { emoji: '🏃', label: 'Treino', color: 'bg-blue-500/20 text-blue-300 border-blue-500/30' };
-      case 'reading': return { emoji: '📚', label: 'Leitura', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
-      case 'budget': return { emoji: '💰', label: 'Orçamento', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' };
-      case 'food': return { emoji: '🍔', label: 'Alimentação', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' };
-      default: return { emoji: '🎯', label: 'Geral', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' };
-    }
+    setXpValue(goalType === 'segmented' ? '20' : '10');
   };
 
   return (
@@ -70,7 +73,7 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black text-white">Subobjetivos & Micro-Missões</h2>
-              <p className="text-xs text-purple-300">Pequenas vitórias diárias geram grandes transformações</p>
+              <p className="text-xs text-purple-300">Pequenas vitórias em etapas geram grandes transformações</p>
             </div>
           </div>
 
@@ -88,7 +91,7 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
           <div className="flex items-center gap-3">
             <Sparkles className="w-5 h-5 text-amber-400" />
             <div>
-              <span className="text-xs text-slate-400 font-bold block">Missões Concluídas Hoje</span>
+              <span className="text-xs text-slate-400 font-bold block">Missões Ativas/Concluídas</span>
               <span className="text-base sm:text-lg font-black text-amber-300">
                 {completedTodayCount} de {subGoals.length} micro-missões
               </span>
@@ -96,8 +99,8 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
           </div>
 
           <div className="text-right">
-            <span className="text-xs text-slate-400 font-bold block">Total de Subobjetivos</span>
-            <span className="text-base sm:text-lg font-black text-white">{subGoals.length} cadastrados</span>
+            <span className="text-xs text-slate-400 font-bold block">Total Cadastrado</span>
+            <span className="text-base sm:text-lg font-black text-white">{subGoals.length} missões</span>
           </div>
         </div>
       </div>
@@ -157,65 +160,28 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
       </div>
 
       {/* Sub-goals List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {filteredSubGoals.map(sg => {
-          const isDone = sg.completedDates.includes(todayStr);
-          const badge = getCategoryBadge(sg.habitCategory);
-
-          return (
-            <div
+      {filteredSubGoals.length === 0 ? (
+        <div className="game-card text-center py-10">
+          <p className="text-sm font-bold text-slate-400">Nenhum subobjetivo encontrado nesta categoria.</p>
+          <button
+            onClick={() => { soundEngine.playClick(); setIsModalOpen(true); }}
+            className="mt-3 text-xs text-purple-400 font-bold hover:underline cursor-pointer"
+          >
+            + Criar primeiro subobjetivo
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filteredSubGoals.map(sg => (
+            <SubGoalCard
               key={sg.id}
-              className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-between gap-3 ${
-                isDone
-                  ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-100 shadow-sm'
-                  : 'bg-[#171A29] border-slate-800 hover:border-purple-500/40 text-slate-200'
-              }`}
-            >
-              <div
-                onClick={() => onToggleSubGoal(sg.id)}
-                className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-              >
-                {isDone ? (
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-                ) : (
-                  <Circle className="w-6 h-6 text-slate-500 hover:text-purple-400 shrink-0 transition-colors" />
-                )}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[10px] font-black px-2 py-0.2 rounded-md border ${badge.color}`}>
-                      {badge.emoji} {badge.label}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
-                      {sg.periodicity === 'daily' ? 'Diário' : sg.periodicity === 'weekly' ? 'Semanal' : 'Pontual'}
-                    </span>
-                  </div>
-                  <h4 className={`text-sm font-bold truncate ${isDone ? 'line-through opacity-75' : ''}`}>
-                    {sg.title}
-                  </h4>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${
-                  isDone
-                    ? 'bg-emerald-500/20 text-emerald-300'
-                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                }`}>
-                  +{sg.xpValue} XP
-                </span>
-
-                <button
-                  onClick={() => { soundEngine.playClick(); onDeleteSubGoal(sg.id); }}
-                  className="text-slate-600 hover:text-rose-400 p-1.5 rounded-xl transition-colors cursor-pointer"
-                  title="Excluir subobjetivo"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              subGoal={sg}
+              onProgress={onProgressSubGoal}
+              onDelete={onDeleteSubGoal}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Modal: Criar Subobjetivo */}
       {isModalOpen && (
@@ -225,10 +191,48 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
               <span>🎯</span> Nova Micro-Missão / Subobjetivo
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Crie subobjetivos específicos para impulsionar seus hábitos com XP extra!
+              Crie subobjetivos em etapas ou com check diário para ganhar XP extra!
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Type Selection: Segmented vs Checkbox */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Tipo de Subobjetivo</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGoalType('segmented');
+                      setXpValue('20');
+                    }}
+                    className={`py-2.5 px-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      goalType === 'segmented'
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-game-green'
+                        : 'bg-[#121422] text-slate-400 border-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span>Em Etapas (2 a 6)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGoalType('checkbox');
+                      setXpValue('10');
+                    }}
+                    className={`py-2.5 px-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      goalType === 'checkbox'
+                        ? 'bg-purple-600 text-white border-purple-400 shadow-game-purple'
+                        : 'bg-[#121422] text-slate-400 border-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    <span>Check Simples</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">Título do Subobjetivo</label>
@@ -237,10 +241,43 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
                   required
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="Ex: Alongar 10 min, Ler antes de dormir, Beber 2L..."
+                  placeholder={
+                    goalType === 'segmented'
+                      ? 'Ex: 3 dias sem refrigerante, 4 treinos de perna...'
+                      : 'Ex: Alongar 10 min, Ler antes de dormir...'
+                  }
                   className="w-full bg-[#121422] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold focus:border-purple-500 focus:outline-none"
                 />
               </div>
+
+              {/* Segmented Parts Selector (if goalType === 'segmented') */}
+              {goalType === 'segmented' && (
+                <div className="bg-[#121422] p-3 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300">Quantidade de Partes / Barras</label>
+                    <span className="text-xs font-black text-emerald-400">{targetParts} partes</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[2, 3, 4, 5, 6].map(num => (
+                      <button
+                        type="button"
+                        key={num}
+                        onClick={() => setTargetParts(num)}
+                        className={`py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                          targetParts === num
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-semibold">
+                    💡 Ao completar as {targetParts} barras, você ganha o XP e o ciclo zera para recomeçar.
+                  </p>
+                </div>
+              )}
 
               {/* Habit Category */}
               <div>
@@ -268,26 +305,36 @@ export const SubGoalsSection: React.FC<SubGoalsSectionProps> = ({
                 </div>
               </div>
 
-              {/* Periodicity & XP Value */}
+              {/* Periodicity (if checkbox) & XP Value */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Periodicidade</label>
-                  <select
-                    value={periodicity}
-                    onChange={e => setPeriodicity(e.target.value as 'daily' | 'weekly' | 'one-time')}
-                    className="w-full bg-[#121422] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold focus:border-purple-500 focus:outline-none"
-                  >
-                    <option value="daily">Diário (Todo dia)</option>
-                    <option value="weekly">Semanal</option>
-                    <option value="one-time">Único (Pontual)</option>
-                  </select>
-                </div>
+                {goalType === 'checkbox' ? (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">Periodicidade</label>
+                    <select
+                      value={periodicity}
+                      onChange={e => setPeriodicity(e.target.value as 'daily' | 'weekly' | 'one-time')}
+                      className="w-full bg-[#121422] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="daily">Diário (Todo dia)</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="one-time">Único (Pontual)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">Ciclo</label>
+                    <div className="w-full bg-[#121422] border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-300 font-bold">
+                      🔄 Recorrente ({targetParts} etapas)
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">Recompensa (XP)</label>
                   <input
                     type="number"
                     min="5"
-                    max="100"
+                    max="200"
                     required
                     value={xpValue}
                     onChange={e => setXpValue(e.target.value)}

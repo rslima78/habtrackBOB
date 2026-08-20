@@ -26,7 +26,7 @@ export function evaluateAchievements(state: AppState): AchievementEvaluationResu
   ).length;
 
   const completedSubGoalsCount = state.subGoals.reduce(
-    (sum, sg) => sum + (sg.completedDates ? sg.completedDates.length : 0) + (sg.isCompletedOneTime ? 1 : 0),
+    (sum, sg) => sum + (sg.completedDates ? sg.completedDates.length : 0) + (sg.isCompletedOneTime ? 1 : 0) + (sg.totalCompletions || 0),
     0
   );
 

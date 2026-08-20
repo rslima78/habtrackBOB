@@ -2,10 +2,11 @@ import React from 'react';
 import { Trophy, Target, CheckCircle2, Circle, Sparkles, ChevronRight } from 'lucide-react';
 import { AppState, formatDate } from '../../services/storageService';
 import { soundEngine } from '../../services/audioService';
+import { SubGoalCard } from '../subgoals/SubGoalCard';
 
 interface NextMilestoneCardProps {
   state: AppState;
-  onToggleSubGoal: (subGoalId: string) => void;
+  onToggleSubGoal: (subGoalId: string, delta?: 1 | -1) => void;
   onNavigateToTab: (tab: 'achievements' | 'habits') => void;
 }
 
@@ -115,41 +116,21 @@ export const NextMilestoneCard: React.FC<NextMilestoneCardProps> = ({
 
         {/* Sub-goals list */}
         <div className="space-y-2 mb-2">
-          {dailySubGoals.slice(0, 3).map(sg => {
-            const isCompleted = sg.completedDates.includes(todayStr);
-            return (
-              <div
+          {dailySubGoals.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3 text-center">Nenhum subobjetivo cadastrado ainda.</p>
+          ) : (
+            dailySubGoals.slice(0, 3).map(sg => (
+              <SubGoalCard
                 key={sg.id}
-                onClick={() => onToggleSubGoal(sg.id)}
-                className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                  isCompleted
-                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                    : 'bg-[#121422]/90 border-slate-800 hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-slate-500 shrink-0" />
-                  )}
-                  <span className={`text-xs font-bold truncate ${isCompleted ? 'line-through opacity-80' : ''}`}>
-                    {sg.title}
-                  </span>
-                </div>
-
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ${
-                  isCompleted ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                }`}>
-                  +{sg.xpValue} XP
-                </span>
-              </div>
-            );
-          })}
+                subGoal={sg}
+                onProgress={(id, delta) => onToggleSubGoal(id, delta)}
+              />
+            ))
+          )}
         </div>
 
         <p className="text-[10px] text-slate-400 text-center">
-          Clique para marcar/desmarcar a conclusão da missão hoje.
+          Clique no card para avançar a missão ou segure para diminuir.
         </p>
       </div>
 

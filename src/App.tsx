@@ -434,49 +434,114 @@ export const App: React.FC = () => {
     }));
   };
 
-  const handleToggleSubGoal = (id: string) => {
+  const handleProgressSubGoal = (id: string, delta: 1 | -1 = 1) => {
     const todayStr = formatDate(new Date());
     const subGoal = state.subGoals.find(sg => sg.id === id);
     if (!subGoal) return;
 
-    const isAlreadyCompleted = subGoal.completedDates.includes(todayStr);
+    if (subGoal.type === 'segmented') {
+      const targetParts = subGoal.targetParts || 3;
+      const current = subGoal.currentParts || 0;
 
-    if (isAlreadyCompleted) {
-      // Uncheck
-      soundEngine.playClick();
-      updateStateAndPersist(prev => ({
-        ...prev,
-        subGoals: prev.subGoals.map(sg => {
-          if (sg.id === id) {
-            return {
-              ...sg,
-              completedDates: sg.completedDates.filter(d => d !== todayStr)
-            };
-          }
-          return sg;
-        })
-      }));
+      if (delta === 1) {
+        const nextParts = current + 1;
+        if (nextParts >= targetParts) {
+          // Completed full cycle!
+          soundEngine.playAchievement();
+          triggerXpAward(
+            subGoal.xpValue,
+            'subgoal',
+            `Ciclo Concluído: ${subGoal.title}`,
+            '🎯',
+            `subgoal-seg-${id}-${Date.now()}`,
+            prev => ({
+              ...prev,
+              subGoals: prev.subGoals.map(sg => {
+                if (sg.id === id) {
+                  return {
+                    ...sg,
+                    currentParts: 0,
+                    totalCompletions: (sg.totalCompletions || 0) + 1,
+                    completedDates: sg.completedDates.includes(todayStr)
+                      ? sg.completedDates
+                      : [...sg.completedDates, todayStr]
+                  };
+                }
+                return sg;
+              })
+            })
+          );
+        } else {
+          // Incremented +1 part
+          soundEngine.playPop();
+          updateStateAndPersist(prev => ({
+            ...prev,
+            subGoals: prev.subGoals.map(sg => {
+              if (sg.id === id) {
+                return {
+                  ...sg,
+                  currentParts: nextParts
+                };
+              }
+              return sg;
+            })
+          }));
+        }
+      } else if (delta === -1) {
+        if (current > 0) {
+          soundEngine.playClick();
+          updateStateAndPersist(prev => ({
+            ...prev,
+            subGoals: prev.subGoals.map(sg => {
+              if (sg.id === id) {
+                return {
+                  ...sg,
+                  currentParts: current - 1
+                };
+              }
+              return sg;
+            })
+          }));
+        }
+      }
     } else {
-      // Complete & Award XP atomically
-      triggerXpAward(
-        subGoal.xpValue,
-        'subgoal',
-        `Micro-Missão: ${subGoal.title}`,
-        '🎯',
-        `subgoal-${id}-${todayStr}`,
-        prev => ({
+      // Checkbox goal
+      const isAlreadyCompleted = subGoal.completedDates.includes(todayStr);
+      if (isAlreadyCompleted) {
+        soundEngine.playClick();
+        updateStateAndPersist(prev => ({
           ...prev,
           subGoals: prev.subGoals.map(sg => {
             if (sg.id === id) {
               return {
                 ...sg,
-                completedDates: [...sg.completedDates, todayStr]
+                completedDates: sg.completedDates.filter(d => d !== todayStr)
               };
             }
             return sg;
           })
-        })
-      );
+        }));
+      } else {
+        triggerXpAward(
+          subGoal.xpValue,
+          'subgoal',
+          `Micro-Missão: ${subGoal.title}`,
+          '🎯',
+          `subgoal-${id}-${todayStr}`,
+          prev => ({
+            ...prev,
+            subGoals: prev.subGoals.map(sg => {
+              if (sg.id === id) {
+                return {
+                  ...sg,
+                  completedDates: [...sg.completedDates, todayStr]
+                };
+              }
+              return sg;
+            })
+          })
+        );
+      }
     }
   };
 
@@ -634,7 +699,7 @@ export const App: React.FC = () => {
             {/* Next Milestone & Sub-goals */}
             <NextMilestoneCard
               state={state}
-              onToggleSubGoal={handleToggleSubGoal}
+              onToggleSubGoal={handleProgressSubGoal}
               onNavigateToTab={(t) => setActiveTab(t)}
             />
 
@@ -680,7 +745,7 @@ export const App: React.FC = () => {
                 onAddWorkout={handleAddWorkout}
                 onDeleteWorkout={handleDeleteWorkout}
                 onUpdateLog={handleUpdateLog}
-                onToggleSubGoal={handleToggleSubGoal}
+                onToggleSubGoal={handleProgressSubGoal}
               />
             )}
 
@@ -694,7 +759,7 @@ export const App: React.FC = () => {
                 onAddBook={handleAddBook}
                 onDeleteReadingLog={handleDeleteReadingLog}
                 onUpdateLog={handleUpdateLog}
-                onToggleSubGoal={handleToggleSubGoal}
+                onToggleSubGoal={handleProgressSubGoal}
               />
             )}
 
@@ -706,7 +771,7 @@ export const App: React.FC = () => {
                 onAddExpense={handleAddExpense}
                 onDeleteExpense={handleDeleteExpense}
                 onUpdateLog={handleUpdateLog}
-                onToggleSubGoal={handleToggleSubGoal}
+                onToggleSubGoal={handleProgressSubGoal}
               />
             )}
 
@@ -718,7 +783,7 @@ export const App: React.FC = () => {
                 onLogFood={handleLogFood}
                 onUpdateLog={handleUpdateLog}
                 onDeleteFoodLog={handleDeleteFoodLog}
-                onToggleSubGoal={handleToggleSubGoal}
+                onToggleSubGoal={handleProgressSubGoal}
               />
             )}
 
@@ -727,7 +792,7 @@ export const App: React.FC = () => {
                 subGoals={state.subGoals}
                 onAddSubGoal={handleAddSubGoal}
                 onDeleteSubGoal={handleDeleteSubGoal}
-                onToggleSubGoal={handleToggleSubGoal}
+                onProgressSubGoal={handleProgressSubGoal}
               />
             )}
 

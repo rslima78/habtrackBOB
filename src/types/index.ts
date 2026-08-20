@@ -86,6 +86,8 @@ export interface FoodLog {
   createdAt: string;
 }
 
+export type SubGoalType = 'checkbox' | 'segmented';
+
 export interface SubGoal {
   id: string;
   habitCategory: HabitCategory;
@@ -94,6 +96,10 @@ export interface SubGoal {
   xpValue: number;
   completedDates: string[]; // List of YYYY-MM-DD dates where it was completed
   isCompletedOneTime?: boolean;
+  type?: SubGoalType;
+  targetParts?: number; // 2 to 6
+  currentParts?: number; // 0 to targetParts
+  totalCompletions?: number;
   createdAt: string;
 }
 

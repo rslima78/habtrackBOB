@@ -3,6 +3,7 @@ import { WorkoutLog, SubGoal, AppSettings } from '../../types';
 import { Plus, Trash2, Trophy, Flame, Timer, Footprints, Calendar as CalendarIcon, CheckCircle2, Circle, Pencil } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
 import { EditTarget, LogEditModal } from '../common/LogEditModal';
+import { SubGoalCard } from '../subgoals/SubGoalCard';
 
 interface WorkoutsSectionProps {
   workouts: WorkoutLog[];
@@ -11,7 +12,7 @@ interface WorkoutsSectionProps {
   onAddWorkout: (workout: Omit<WorkoutLog, 'id' | 'createdAt' | 'xpEarned'>) => void;
   onDeleteWorkout: (id: string) => void;
   onUpdateLog: (updated: EditTarget) => void;
-  onToggleSubGoal: (subGoalId: string) => void;
+  onToggleSubGoal: (subGoalId: string, delta?: 1 | -1) => void;
 }
 
 export const WorkoutsSection: React.FC<WorkoutsSectionProps> = ({
@@ -134,30 +135,19 @@ export const WorkoutsSection: React.FC<WorkoutsSectionProps> = ({
         <h3 className="text-sm font-black text-white uppercase tracking-wider mb-3 flex items-center gap-2">
           <span>🎯</span> Subobjetivos de Treino
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {workoutSubGoals.map(sg => {
-            const isDone = sg.completedDates.includes(todayStr);
-            return (
-              <div
+        {workoutSubGoals.length === 0 ? (
+          <p className="text-xs text-slate-400 py-2">Nenhum subobjetivo vinculado a treinos.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {workoutSubGoals.map(sg => (
+              <SubGoalCard
                 key={sg.id}
-                onClick={() => onToggleSubGoal(sg.id)}
-                className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                  isDone
-                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
-                    : 'bg-[#121422] border-slate-800 hover:border-slate-700 text-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  {isDone ? <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" /> : <Circle className="w-5 h-5 text-slate-500 shrink-0" />}
-                  <span className={`text-xs font-bold ${isDone ? 'line-through opacity-75' : ''}`}>{sg.title}</span>
-                </div>
-                <span className="text-[10px] font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-lg shrink-0">
-                  +{sg.xpValue} XP
-                </span>
-              </div>
-            );
-          })}
-        </div>
+                subGoal={sg}
+                onProgress={(id, delta) => onToggleSubGoal(id, delta)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Workout History List */}
