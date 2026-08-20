@@ -26,11 +26,12 @@ import { BudgetSection } from './components/habits/BudgetSection';
 import { FoodSection } from './components/habits/FoodSection';
 import { SubGoalsSection } from './components/subgoals/SubGoalsSection';
 
-// Calendar, Stats, Achievements, Settings
+// Calendar, Stats, Achievements, Settings, Vault
 import { MonthlyCalendar } from './components/calendar/MonthlyCalendar';
 import { StatsView } from './components/stats/StatsView';
 import { AchievementsView } from './components/achievements/AchievementsView';
 import { SettingsView } from './components/settings/SettingsView';
+import { VaultView } from './components/vault/VaultView';
 
 import { EditTarget } from './components/common/LogEditModal';
 
@@ -493,6 +494,16 @@ export const App: React.FC = () => {
     setActiveTab('home');
   };
 
+  const handleUpdateDailyLimit = (newLimit: number) => {
+    updateStateAndPersist(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        budgetDailyLimit: newLimit
+      }
+    }));
+  };
+
   const handleLoadDemoSeed = () => {
     const seed = StorageService.resetToSeed();
     setState(seed);
@@ -616,6 +627,7 @@ export const App: React.FC = () => {
                   setActiveTab('habits');
                   setActiveHabitSubTab(hKey as HabitCategory);
                 }}
+                onNavigateToVault={() => setActiveTab('vault')}
               />
             </div>
 
@@ -720,6 +732,20 @@ export const App: React.FC = () => {
             )}
 
           </div>
+        )}
+
+        {/* ⚡ TAB: COFRE (SAVINGS ENERGY BAR) */}
+        {activeTab === 'vault' && (
+          <VaultView
+            expenses={state.expenses}
+            settings={state.settings}
+            userCreatedAt={state.user.createdAt}
+            onUpdateDailyLimit={handleUpdateDailyLimit}
+            onNavigateToHabits={() => {
+              setActiveTab('habits');
+              setActiveHabitSubTab('budget');
+            }}
+          />
         )}
 
         {/* 📅 TAB 3: CALENDÁRIO */}

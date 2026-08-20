@@ -1,8 +1,8 @@
 import React from 'react';
-import { Home, Target, Calendar, BarChart3, Trophy, Settings } from 'lucide-react';
+import { Home, Target, Calendar, BarChart3, Trophy, Settings, Zap } from 'lucide-react';
 import { soundEngine } from '../../services/audioService';
 
-export type TabType = 'home' | 'habits' | 'calendar' | 'stats' | 'achievements' | 'settings';
+export type TabType = 'home' | 'habits' | 'vault' | 'calendar' | 'stats' | 'achievements' | 'settings';
 
 interface NavigationProps {
   activeTab: TabType;
@@ -18,6 +18,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   const tabs = [
     { id: 'home' as TabType, label: 'Início', icon: Home, emoji: '🏠' },
     { id: 'habits' as TabType, label: 'Hábitos', icon: Target, emoji: '🎯' },
+    { id: 'vault' as TabType, label: 'Cofre', icon: Zap, emoji: '⚡' },
     { id: 'calendar' as TabType, label: 'Calendário', icon: Calendar, emoji: '📅' },
     { id: 'stats' as TabType, label: 'Estatísticas', icon: BarChart3, emoji: '📊' },
     { id: 'achievements' as TabType, label: 'Conquistas', icon: Trophy, emoji: '🏆', badge: unlockedAchievementsCount },

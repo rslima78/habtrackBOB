@@ -11,6 +11,7 @@ interface QuickHabitGridProps {
   onOpenExpenseModal: () => void;
   onQuickFoodLog: (status: 'controlled' | 'partial' | 'uncontrolled') => void;
   onNavigateToHabit: (habitKey: string) => void;
+  onNavigateToVault?: () => void;
 }
 
 export const QuickHabitGrid: React.FC<QuickHabitGridProps> = ({
@@ -20,6 +21,7 @@ export const QuickHabitGrid: React.FC<QuickHabitGridProps> = ({
   onOpenExpenseModal,
   onQuickFoodLog,
   onNavigateToHabit,
+  onNavigateToVault,
 }) => {
   const todayStr = formatDate(new Date());
   const streaks = calculateStreaks(state);
@@ -209,13 +211,23 @@ export const QuickHabitGrid: React.FC<QuickHabitGridProps> = ({
                 </span>
               </div>
             </div>
-            <button
-              onClick={() => { soundEngine.playClick(); onNavigateToHabit('budget'); }}
-              className="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Histórico</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onNavigateToVault && (
+                <button
+                  onClick={() => { soundEngine.playClick(); onNavigateToVault(); }}
+                  className="text-xs font-black text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-2 py-1 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>⚡ Cofre</span>
+                </button>
+              )}
+              <button
+                onClick={() => { soundEngine.playClick(); onNavigateToHabit('budget'); }}
+                className="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>Histórico</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Budget Progress & Situational Message */}
